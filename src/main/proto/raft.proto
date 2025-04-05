@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "alg.raft";
+option java_outer_classname = "RaftProto";
+
+import "google/protobuf/wrappers.proto";
+
+service RaftService {
+  rpc appendEntries(AppendEntriesReq) returns (AppendEntriesResp);
+  rpc requestVote(RequestVoteReq) returns (RequestVoteResp);
+}
+
+message AppendEntriesReq {
+  int64 term = 1;             // leader's term
+  int64 leaderId = 2;
+  int32 prevLogIndex = 3;
+  int64 prevLogTerm = 4;
+  repeated Entry entries = 5; // empty for heartbeat
+  int64 leaderCommit = 6;     // leader's commitIndex
+}
+
+message AppendEntriesResp {
+  int64 term = 1;
+  bool success = 2;
+}
+
+message RequestVoteReq {
+  int64 term = 1;
+  int64 candidateId = 2;
+  int32 lastLogIndex = 3;
+  int64 lastLogTerm = 4;
+}
+
+message RequestVoteResp {
+  int64 term = 1;
+  bool voteGranted = 2;
+}
+
+message Entry {
+  int32 sequence = 1;
+  int64 term = 2;
+  enum EntryType {
+      CLIENT_COMMAND = 0;
+      CONFIGURATION = 1;
+      MEMBER_JOIN = 2;
+      MEMBER_LEAVE = 3;
+  }
+  EntryType type = 3;
+  string log = 4;
+}

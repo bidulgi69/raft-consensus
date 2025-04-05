@@ -1,0 +1,48 @@
+services:
+  raft-node1:
+    build: .
+    container_name: raft-node1
+    ports:
+      - "8080:8080"
+    environment:
+      RAFT_APP_NAME: raft-node1
+      RAFT_CLUSTER_NODES: raft-node1:9090,raft-node2:9090,raft-node3:9090
+    networks:
+      - raft-cluster
+
+  raft-node2:
+    build: .
+    container_name: raft-node2
+    ports:
+      - "8081:8080"
+    environment:
+      RAFT_APP_NAME: raft-node2
+      RAFT_CLUSTER_NODES: raft-node1:9090,raft-node2:9090,raft-node3:9090
+    networks:
+      - raft-cluster
+
+  raft-node3:
+    build: .
+    container_name: raft-node3
+    ports:
+      - "8082:8080"
+    environment:
+      RAFT_APP_NAME: raft-node3
+      RAFT_CLUSTER_NODES: raft-node1:9090,raft-node2:9090,raft-node3:9090
+    networks:
+      - raft-cluster
+
+  raft-node4:
+    build: .
+    container_name: raft-node4
+    ports:
+      - "8083:8080"
+    environment:
+      RAFT_APP_NAME: raft-node4
+      RAFT_CLUSTER_NODES: raft-node1:9090,raft-node2:9090,raft-node3:9090,raft-node4:9090
+    networks:
+      - raft-cluster
+
+networks:
+  raft-cluster:
+    driver: bridge
