@@ -92,7 +92,7 @@ public class ElectionManager {
                     break;
                 }
             } catch (StatusRuntimeException e) {
-                if (Status.Code.UNAVAILABLE.value() == e.getStatus().getCode().value()) {
+                if (e.getStatus().getCode() == Status.Code.UNAVAILABLE) {
                     Set<String> oldConfiguration = members.getActiveChannelHosts();
                     Set<String> newConfiguration = new HashSet<>(oldConfiguration);
                     newConfiguration.remove(channel.host());
@@ -102,6 +102,9 @@ public class ElectionManager {
                         newConfiguration
                     );
                     logManager.enqueue(EntryType.CONFIGURATION, configuration);
+                } else {
+                    _logger.error("Error: {}", e.getMessage());
+                    channel.channel().enterIdle();
                 }
             }
 
