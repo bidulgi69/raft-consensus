@@ -55,8 +55,6 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
             state.setVotedFor(null);
             // 하트비트 수신 시 election timer 재설정
             electionManager.reschedule();
-            // last commited index 갱신
-            logManager.replicate(request.getLeaderCommit());
             // local state machine 에 반영
             List<LogEntry> acknowledged = logManager.getEntries((int) state.getCommitIndex(), (int) request.getLeaderCommit());
             acknowledged.forEach(le -> {
