@@ -1,11 +1,9 @@
 package alg.raft;
 
-import alg.raft.enums.EntryType;
 import alg.raft.enums.NodeType;
-import alg.raft.message.Configuration;
-import alg.raft.message.ConfigurationType;
 import alg.raft.state.NodeState;
-import io.grpc.Status;
+import alg.raft.utils.Magics;
+import alg.raft.utils.RpcErrorContext;
 import io.grpc.StatusRuntimeException;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -13,9 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -51,7 +47,6 @@ public class LeaseManager {
         heartbeat = scheduledExecutorService.scheduleAtFixedRate(() -> members.getActiveChannels()
             .parallelStream()
             .forEach(channel -> {
-                RaftServiceGrpc.RaftServiceBlockingStub stub = RaftServiceGrpc.newBlockingStub(channel.channel());
                 final int nextIndex = (int) state.getNextIndex(channel.id());
                 final int lastIndex = nextIndex + 100;
                 List<Entry> logs = logManager.getEntries(nextIndex, lastIndex)
@@ -64,8 +59,15 @@ public class LeaseManager {
                         .build()
                     )
                     .toList();
-                LogEntry prev = logManager.getLastEntry();
+                LogEntry prev = logManager.getPrevEntry(nextIndex);
 
+                RaftServiceGrpc.RaftServiceBlockingStub stub = RaftServiceGrpc.newBlockingStub(channel.channel())
+                    .withDeadlineAfter(
+                        logs.isEmpty() ?
+                            Magics.DEFAULT_HEARTBEAT_RPC_SYNC_TIMEOUT_MILLIS
+                            : Magics.MAX_APPEND_ENTRIES_RPC_SYNC_TIMEOUT_MILLIS,
+                        TimeUnit.MILLISECONDS
+                    );
                 AppendEntriesReq req = AppendEntriesReq.newBuilder()
                     .setTerm(state.getCurrentTerm())
                     .setLeaderId(state.getAppId())   //  heartbeat 를 전송하는 것은 leader node
@@ -92,23 +94,14 @@ public class LeaseManager {
                         }
                     }
                 } catch (StatusRuntimeException e) {
-                    // change membership
-                    // joint consensus
-                    // 이전 member group 과 현재 member group 을 관리
-                    if (e.getStatus().getCode() == Status.Code.UNAVAILABLE) {
-                        Set<String> oldConfiguration = members.getActiveChannelHosts();
-                        Set<String> newConfiguration = new HashSet<>(oldConfiguration);
-                        newConfiguration.remove(channel.host());
-                        Configuration configuration = new Configuration(
-                            ConfigurationType.JOINT,
-                            oldConfiguration,
-                            newConfiguration
-                        );
-                        logManager.enqueue(EntryType.CONFIGURATION, configuration);
-                    } else {
-                        _logger.error("Error: {}", e.getMessage());
-                        channel.channel().enterIdle();
-                    }
+                    _logger.error("RaftServiceGrpc.appendEntries(heartbeat) failed by status {}", e.getStatus().getCode().name());
+                    RpcErrorHandler.handleRpcError(new RpcErrorContext(
+                        channel,
+                        e,
+                        state,
+                        members,
+                        logManager
+                    ));
                 }
             }), 0, properties.getLeaseInterval(), TimeUnit.MILLISECONDS);
     }

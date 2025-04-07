@@ -7,28 +7,25 @@ import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-@Service
+@Component
 public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
 
     private final NodeState state;
     private final LogManager logManager;
-    private final LogTaskProcessor logTaskProcessor;
     private final ElectionManager electionManager;
     private final Logger _logger = LoggerFactory.getLogger(getClass());
 
     @Autowired
     public RaftGrpcService(NodeState state,
                            LogManager logManager,
-                           LogTaskProcessor logTaskProcessor,
                            ElectionManager electionManager
     ) {
         this.state = state;
         this.logManager = logManager;
-        this.logTaskProcessor = logTaskProcessor;
         this.electionManager = electionManager;
     }
 
@@ -47,29 +44,6 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
             return;
         }
 
-        // reply on heartbeat
-        if (entries.isEmpty()) {
-            _logger.info("Node({}) received a `Heartbeat` from the leader({}).", state.getAppId(), request.getLeaderId());
-            state.setType(NodeType.FOLLOWER);
-            state.setCurrentTerm(request.getTerm());
-            state.setVotedFor(null);
-            // 하트비트 수신 시 election timer 재설정
-            electionManager.reschedule();
-            // local state machine 에 반영
-            List<LogEntry> acknowledged = logManager.getEntries((int) state.getCommitIndex(), (int) request.getLeaderCommit());
-            acknowledged.forEach(le -> {
-                state.setCommitIndex(le.sequence());
-                logTaskProcessor.registerTask(le);
-            });
-
-            responseObserver.onNext(defaultRespBuilder
-                .setSuccess(true)
-                .build()
-            );
-            responseObserver.onCompleted();
-            return;
-        }
-
         // 2. Reply false if log doesn’t contain an entry at prevLogIndex
         // whose term matches prevLogTerm (§5.3)
         if (request.getPrevLogIndex() >= 0) {
@@ -82,6 +56,19 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
         }
 
         _logger.info("Node({}) received log entries from the leader.", state.getAppId());
+        state.setType(NodeType.FOLLOWER);
+        if (state.getCurrentTerm() < request.getTerm()) {
+            state.setCurrentTerm(request.getTerm());
+            state.setVotedFor(null);
+        }
+
+        // reply on heartbeat
+        if (entries.isEmpty()) {
+            _logger.info("Node({}) received a `Heartbeat` from the leader({}).", state.getAppId(), request.getLeaderId());
+            // 하트비트 수신 시 election timer 재설정
+            electionManager.reschedule();
+        }
+
         // 3. If an existing entry conflicts with a new one (same index
         // but different terms), delete the existing entry and all that
         // follow it (§5.3)
@@ -94,6 +81,8 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
                 replicateFromIndex = i;
                 // entry 는 정렬된 상태이므로, 한번이라도 수행되면 이후의 처리는 넘어가도 됨.
                 break;
+            } else if (existingEntry != null) {
+                replicateFromIndex = i+1;
             }
         }
 
@@ -105,10 +94,10 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
         }
 
         // local state machine 에 반영
-        List<LogEntry> acknowledged = logManager.getEntries((int) state.getCommitIndex(), (int) request.getLeaderCommit());
+        List<LogEntry> acknowledged = logManager.getEntries((int) state.getLastApplied() + 1, (int) request.getLeaderCommit());
         acknowledged.forEach(le -> {
             state.setCommitIndex(le.sequence());
-            logTaskProcessor.registerTask(le);
+            logManager.registerTask(le);
         });
 
         responseObserver.onNext(defaultRespBuilder

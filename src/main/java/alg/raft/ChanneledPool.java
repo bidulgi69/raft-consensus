@@ -31,6 +31,10 @@ public class ChanneledPool {
         pool.put(url, channel);
     }
 
+    public void unpool(String url) {
+        pool.remove(url);
+    }
+
     public ManagedChannel getChannel(String url) {
         if (pool.containsKey(url)) {
             return pool.get(url);

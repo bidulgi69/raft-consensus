@@ -87,6 +87,14 @@ public class NodeState {
         return matchIndex.getOrDefault(id, 0L);
     }
 
+    public synchronized void removeNextIndex(String id) {
+        nextIndex.remove(id);
+    }
+
+    public synchronized void removeMatchIndex(String id) {
+        matchIndex.remove(id);
+    }
+
     public long getCommitIndex() {
         return commitIndex;
     }

@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @RestController
@@ -37,17 +38,6 @@ public class OperationController {
             // commit logs when the majority of nodes acknowledged it(by commitIndex)
             logManager.enqueue(EntryType.MESSAGE, clientCommand.message());
         }
-    }
-
-    @GetMapping("/logs")
-    public Iterable<LogEntry> getLogs() {
-        // returns entire entries
-        return logManager.getCommitedEntries();
-    }
-
-    @GetMapping("/statez")
-    public String getState() {
-        return nodeState.toString();
     }
 
     @PatchMapping("/join")
@@ -84,12 +74,15 @@ public class OperationController {
         logManager.enqueue(EntryType.CONFIGURATION, configuration);
     }
 
-    @GetMapping("/members")
-    public Iterable<String> getMembers() {
-        return members.getActiveChannels()
-            .stream()
-            .map(Channel::host)
-            .toList();
+    @GetMapping("/logs")
+    public Iterable<LogEntry> getLogs() {
+        // returns entire entries
+        return logManager.getCommitedEntries();
+    }
+
+    @GetMapping("/statez")
+    public String getState() {
+        return nodeState.toString();
     }
 
     @GetMapping("/type")
@@ -97,4 +90,21 @@ public class OperationController {
         return nodeState.getType();
     }
 
+    @GetMapping("/membership")
+    public String getMembership() {
+        List<String> hosts = members.getActiveChannels()
+            .stream()
+            .map(Channel::host)
+            .toList();
+
+        return """
+            [Membership]
+            | type: %s
+            | members: %s
+            """
+            .formatted(
+                members.getMembership(),
+                hosts
+            );
+    }
 }

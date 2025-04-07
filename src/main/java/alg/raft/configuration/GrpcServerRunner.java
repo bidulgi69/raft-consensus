@@ -1,6 +1,5 @@
 package alg.raft.configuration;
 
-import alg.raft.forremoval.HelloGrpcService;
 import alg.raft.rpc.RaftGrpcService;
 import io.grpc.Server;
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
@@ -19,23 +18,25 @@ public class GrpcServerRunner implements ApplicationRunner {
 
     private Server server;
 
-    private final HelloGrpcService myGrpcServiceImpl;
+    // grpc 서버 실행 이후 처리를 위한 DI
+    private final Initializer initializer;
     private final RaftGrpcService raftGrpcServiceImpl;
 
-    public GrpcServerRunner(HelloGrpcService myGrpcServiceImpl,
+    public GrpcServerRunner(Initializer initializer,
                             RaftGrpcService raftGrpcServiceImpl
     ) {
-        this.myGrpcServiceImpl = myGrpcServiceImpl;
+        this.initializer = initializer;
         this.raftGrpcServiceImpl = raftGrpcServiceImpl;
     }
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
         server = NettyServerBuilder.forPort(grpcPort)
-            .addService(myGrpcServiceImpl)
             .addService(raftGrpcServiceImpl)
             .build()
             .start();
+
+        initializer.run();
     }
 
     @PreDestroy

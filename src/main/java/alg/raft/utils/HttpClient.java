@@ -26,9 +26,9 @@ public class HttpClient {
             .onErrorResume(throwable -> Mono.just(NodeType.FOLLOWER));
     }
 
-    public Mono<Void> join(String node, String appName, int port) {
+    public Mono<Void> join(String node, String appName) {
         return webClient.patch()
-            .uri("http://" + node + ":" + DEFAULT_HTTP_PORT + "/join?node=" + appName + "&port=" + port)
+            .uri("http://" + node + ":" + DEFAULT_HTTP_PORT + "/join?node=" + appName)
             .retrieve()
             .bodyToMono(Void.class);
     }

@@ -1,11 +1,8 @@
 package alg.raft;
 
-import alg.raft.enums.EntryType;
 import alg.raft.enums.NodeType;
-import alg.raft.message.Configuration;
-import alg.raft.message.ConfigurationType;
 import alg.raft.state.NodeState;
-import io.grpc.Status;
+import alg.raft.utils.RpcErrorContext;
 import io.grpc.StatusRuntimeException;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -14,8 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.concurrent.*;
 
 @Component
@@ -71,7 +66,7 @@ public class ElectionManager {
         Collection<Channel> channels = members.getActiveChannels();
 
         int granted = 1;
-        int quorum = 1 + ((channels.size()+1) / 2);
+        int quorum = 1 + members.getActiveChannelCount() / 2;
         int leftCandidates = channels.size();
         for (Channel channel : channels) {
             RaftServiceGrpc.RaftServiceBlockingStub stub = RaftServiceGrpc.newBlockingStub(channel.channel());
@@ -92,20 +87,14 @@ public class ElectionManager {
                     break;
                 }
             } catch (StatusRuntimeException e) {
-                if (e.getStatus().getCode() == Status.Code.UNAVAILABLE) {
-                    Set<String> oldConfiguration = members.getActiveChannelHosts();
-                    Set<String> newConfiguration = new HashSet<>(oldConfiguration);
-                    newConfiguration.remove(channel.host());
-                    Configuration configuration = new Configuration(
-                        ConfigurationType.JOINT,
-                        oldConfiguration,
-                        newConfiguration
-                    );
-                    logManager.enqueue(EntryType.CONFIGURATION, configuration);
-                } else {
-                    _logger.error("Error: {}", e.getMessage());
-                    channel.channel().enterIdle();
-                }
+                _logger.error("RaftServiceGrpc.requestVote failed by status {}", e.getStatus().getCode().name());
+                RpcErrorHandler.handleRpcError(new RpcErrorContext(
+                    channel,
+                    e,
+                    state,
+                    members,
+                    logManager
+                ));
             }
 
             if (quorum - granted > --leftCandidates) {

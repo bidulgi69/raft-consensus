@@ -2,7 +2,17 @@ package alg.raft.enums;
 
 public enum EntryType {
 
-    MESSAGE,
-    CONFIGURATION
+    MESSAGE(false),
+    CONFIGURATION(true)
     ;
+
+    private final boolean jointConsensus;
+
+    EntryType(boolean jointConsensus) {
+        this.jointConsensus = jointConsensus;
+    }
+
+    public boolean isJointConsensus() {
+        return jointConsensus;
+    }
 }
