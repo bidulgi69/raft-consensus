@@ -96,7 +96,6 @@ public class LeaseManager {
                         }
                     }
                 } catch (StatusRuntimeException e) {
-                    _logger.error("RaftServiceGrpc.appendEntries(heartbeat) failed by status {}", e.getStatus().getCode().name());
                     RpcErrorHandler.handleRpcError(new RpcErrorContext(
                         channel,
                         e,

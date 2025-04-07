@@ -89,7 +89,6 @@ public class ElectionManager {
                     break;
                 }
             } catch (StatusRuntimeException e) {
-                _logger.error("RaftServiceGrpc.requestVote failed by status {}", e.getStatus().getCode().name());
                 RpcErrorHandler.handleRpcError(new RpcErrorContext(
                     channel,
                     e,
