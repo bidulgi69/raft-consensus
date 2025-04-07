@@ -1,5 +1,8 @@
-package alg.raft;
+package alg.raft.api;
 
+import alg.raft.Channel;
+import alg.raft.LogManager;
+import alg.raft.Members;
 import alg.raft.enums.EntryType;
 import alg.raft.enums.NodeType;
 import alg.raft.message.Configuration;

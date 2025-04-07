@@ -1,5 +1,6 @@
 package alg.raft;
 
+import alg.raft.configuration.RaftProperties;
 import alg.raft.enums.NodeType;
 import alg.raft.message.LogEntry;
 import alg.raft.state.NodeState;

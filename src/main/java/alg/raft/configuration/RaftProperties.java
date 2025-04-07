@@ -1,4 +1,4 @@
-package alg.raft;
+package alg.raft.configuration;
 
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
