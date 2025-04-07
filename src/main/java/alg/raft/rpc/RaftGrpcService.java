@@ -118,7 +118,6 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
         long candidateLastLogTerm = request.getLastLogTerm();
 
         // 1. Reply false if term < currentTerm (§5.1)
-        // 이후 leader election 이 완료되면 votedFor 은 초기화 해줘야 함
         if (state.getCurrentTerm() > term || state.getVotedFor() != null) {
             responseObserver.onNext(RequestVoteResp.newBuilder()
                 .setTerm(state.getCurrentTerm())
@@ -149,7 +148,6 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
             .setVoteGranted(true)
             .build()
         );
-        // 자신의 election manager 에 대한 초기화 처리
         responseObserver.onCompleted();
     }
 }
