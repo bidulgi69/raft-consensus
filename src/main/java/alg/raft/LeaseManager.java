@@ -1,6 +1,7 @@
 package alg.raft;
 
 import alg.raft.enums.NodeType;
+import alg.raft.message.LogEntry;
 import alg.raft.state.NodeState;
 import alg.raft.utils.Magics;
 import alg.raft.utils.RpcErrorContext;

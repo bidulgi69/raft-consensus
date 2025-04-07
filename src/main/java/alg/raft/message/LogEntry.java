@@ -1,4 +1,4 @@
-package alg.raft;
+package alg.raft.message;
 
 import alg.raft.enums.EntryType;
 

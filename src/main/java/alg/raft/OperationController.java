@@ -5,6 +5,7 @@ import alg.raft.enums.NodeType;
 import alg.raft.message.Configuration;
 import alg.raft.message.ConfigurationType;
 import alg.raft.message.DefaultLog;
+import alg.raft.message.LogEntry;
 import alg.raft.state.NodeState;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;

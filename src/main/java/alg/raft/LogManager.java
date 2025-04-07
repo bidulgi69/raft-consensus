@@ -4,6 +4,7 @@ import alg.raft.enums.EntryType;
 import alg.raft.enums.NodeType;
 import alg.raft.message.Configuration;
 import alg.raft.message.ConfigurationType;
+import alg.raft.message.LogEntry;
 import alg.raft.state.NodeState;
 import alg.raft.utils.JsonMapper;
 import alg.raft.utils.Magics;

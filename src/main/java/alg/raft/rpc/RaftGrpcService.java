@@ -2,6 +2,7 @@ package alg.raft.rpc;
 
 import alg.raft.*;
 import alg.raft.enums.NodeType;
+import alg.raft.message.LogEntry;
 import alg.raft.state.NodeState;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
