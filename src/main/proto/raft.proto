@@ -41,10 +41,8 @@ message Entry {
   int32 sequence = 1;
   int64 term = 2;
   enum EntryType {
-      CLIENT_COMMAND = 0;
+      MESSAGE = 0;
       CONFIGURATION = 1;
-      MEMBER_JOIN = 2;
-      MEMBER_LEAVE = 3;
   }
   EntryType type = 3;
   string log = 4;
