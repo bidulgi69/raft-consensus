@@ -105,7 +105,7 @@ public class ElectionManager {
         // quorum 이상의 node 에게 success 응답을 받은 경우
         // 자신을 leader 로 설정한다
         if (granted >= quorum) {
-            _logger.info("Node {} has electedn as leader for {}th term", state.getAppId(), term);
+            _logger.info("Node {} has elected as leader for {}th term", state.getAppId(), term);
             state.setType(NodeType.LEADER);
             leaseManager.run();
             members.getActiveChannels().forEach(channel -> {
