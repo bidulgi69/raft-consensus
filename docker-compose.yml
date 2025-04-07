@@ -42,6 +42,10 @@ services:
       RAFT_CLUSTER_NODES: raft-node1:9090,raft-node2:9090,raft-node3:9090,raft-node4:9090
     networks:
       - raft-cluster
+    depends_on:
+      - raft-node1
+      - raft-node2
+      - raft-node3
 
 networks:
   raft-cluster:
