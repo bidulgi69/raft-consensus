@@ -1,9 +1,10 @@
 bd:
+	./gradlew clean
 	./gradlew build
 	docker-compose build
 
-rund:
-	docker-compose up -d
+init-cluster:
+	docker-compose up -d raft-node1 raft-node2 raft-node3
 
 logf:
 	docker-compose logs -f
