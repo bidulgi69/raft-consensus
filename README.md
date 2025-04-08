@@ -18,10 +18,15 @@ Dynamically change the cluster configuration by securely adding/removing nodes t
 ---
 
 ## Quick Start
+Before you start, build your project.
+```shell
+make bd
+```
+
 You can try running multiple nodes simultaneously using the docker-compose.yml file included in the project.
 ```shell
 # run with 3 nodes
-docker-compose up init-cluster
+make init-cluster
 ```
 
 You can also experiment with leader election and membership change by creating and stopping docker containers.
