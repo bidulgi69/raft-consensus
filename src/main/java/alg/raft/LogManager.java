@@ -148,7 +148,7 @@ public class LogManager {
     public void registerTask(EntryType type, int sequence, String log) {
         boolean offered = taskQueue.offer(() -> {
             // 이미 반영한 로그는 처리하지 않음
-            if (sequence < state.getLastApplied()) {
+            if (sequence <= state.getLastApplied()) {
                 _logger.info("Log at {} is already processed.", sequence);
                 return;
             }
