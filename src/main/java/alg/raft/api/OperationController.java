@@ -7,8 +7,8 @@ import alg.raft.enums.EntryType;
 import alg.raft.enums.NodeType;
 import alg.raft.message.Configuration;
 import alg.raft.message.ConfigurationType;
-import alg.raft.message.DefaultLog;
 import alg.raft.message.LogEntry;
+import alg.raft.message.Operation;
 import alg.raft.state.NodeState;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -34,13 +34,10 @@ public class OperationController {
         this.nodeState = nodeState;
     }
 
-    @PutMapping("/put")
-    public void put(@RequestBody DefaultLog clientCommand) {
+    @PutMapping("/op")
+    public void op(@RequestBody Operation operation) {
         if (NodeType.LEADER.equals(nodeState.getType())) {
-            // put a single log
-            // broadcasts the log to followers asynchronously
-            // commit logs when the majority of nodes acknowledged it(by commitIndex)
-            logManager.enqueue(EntryType.MESSAGE, clientCommand.message());
+            logManager.enqueue(EntryType.OPERATION, operation);
         }
     }
 

@@ -2,6 +2,8 @@ package alg.raft.rpc;
 
 import alg.raft.*;
 import alg.raft.enums.NodeType;
+import alg.raft.event.EventDispatcher;
+import alg.raft.event.LogApplyEvent;
 import alg.raft.message.LogEntry;
 import alg.raft.state.NodeState;
 import io.grpc.stub.StreamObserver;
@@ -18,16 +20,19 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
     private final NodeState state;
     private final LogManager logManager;
     private final ElectionManager electionManager;
+    private final EventDispatcher eventDispatcher;
     private final Logger _logger = LoggerFactory.getLogger(getClass());
 
     @Autowired
     public RaftGrpcService(NodeState state,
                            LogManager logManager,
-                           ElectionManager electionManager
+                           ElectionManager electionManager,
+                           EventDispatcher eventDispatcher
     ) {
         this.state = state;
         this.logManager = logManager;
         this.electionManager = electionManager;
+        this.eventDispatcher = eventDispatcher;
     }
 
     @Override
@@ -62,13 +67,7 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
             state.setCurrentTerm(request.getTerm());
             state.setVotedFor(null);
         }
-
-        // reply on heartbeat
-        if (entries.isEmpty()) {
-            _logger.info("Node({}) received a `Heartbeat` from the leader({}).", state.getAppId(), request.getLeaderId());
-            // 하트비트 수신 시 election timer 재설정
-            electionManager.reschedule();
-        }
+        electionManager.reschedule();
 
         // 3. If an existing entry conflicts with a new one (same index
         // but different terms), delete the existing entry and all that
@@ -78,7 +77,7 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
             Entry entry = entries.get(i);
             LogEntry existingEntry = logManager.getEntry(entry.getSequence());
             if (existingEntry != null && existingEntry.term() != entry.getTerm()) {
-                logManager.deleteEntriesFromIndex(entry.getSequence());
+                logManager.truncateFrom(entry.getSequence());
                 replicateFromIndex = i;
                 // entry 는 정렬된 상태이므로, 한번이라도 수행되면 이후의 처리는 넘어가도 됨.
                 break;
@@ -98,7 +97,11 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
         List<LogEntry> acknowledged = logManager.getEntries((int) state.getLastApplied() + 1, (int) request.getLeaderCommit());
         acknowledged.forEach(le -> {
             state.setCommitIndex(le.sequence());
-            logManager.registerTask(le);
+            eventDispatcher.dispatchLogApplyEvent(new LogApplyEvent(
+                le.type(),
+                le.sequence(),
+                le.log()
+            ));
         });
 
         responseObserver.onNext(defaultRespBuilder
@@ -114,7 +117,7 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
         long term = request.getTerm();
         long candidateId = request.getCandidateId();
         // attributes for determining the value of `voteGranted`
-        int candidateLastLogIndex = request.getLastLogIndex();
+        long candidateLastLogIndex = request.getLastLogIndex();
         long candidateLastLogTerm = request.getLastLogTerm();
 
         // 1. Reply false if term < currentTerm (§5.1)
@@ -148,6 +151,29 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
             .setVoteGranted(true)
             .build()
         );
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void installSnapshot(InstallSnapshotReq request, StreamObserver<InstallSnapshotResp> responseObserver) {
+        InstallSnapshotResp resp = InstallSnapshotResp.newBuilder()
+            .setTerm(state.getCurrentTerm())
+            .build();
+
+        //1. Reply immediately if term < currentTerm
+        if (request.getTerm() < state.getCurrentTerm()) {
+            responseObserver.onNext(resp);
+            responseObserver.onCompleted();
+            return;
+        }
+
+        logManager.installSnapshot(request.getLastIncludedIndex(),
+            request.getLastIncludedTerm(),
+            request.getOffset(),
+            request.getData(),
+            request.getDone()
+        );
+        responseObserver.onNext(resp);
         responseObserver.onCompleted();
     }
 }

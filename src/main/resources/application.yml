@@ -11,7 +11,9 @@ grpc:
     port: 9090
 
 alg.raft:
-  heartbeat.interval.ms: 1000
+  heartbeat-interval-ms: 1000
   election:
-    min-timeout.ms: 4000
-    max-timeout.ms: 10000
+    min-timeout-ms: 4000
+    max-timeout-ms: 10000
+  compaction:
+    threshold: 5

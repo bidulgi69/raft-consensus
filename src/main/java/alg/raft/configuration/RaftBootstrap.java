@@ -12,7 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
-public class Initializer {
+public class RaftBootstrap {
 
     @Value("${raft.app.name:}")
     private String appName;
@@ -23,9 +23,9 @@ public class Initializer {
     private final Logger _logger = LoggerFactory.getLogger(getClass());
 
     @Autowired
-    public Initializer(Members members,
-                       HttpClient httpClient,
-                       ElectionManager electionManager
+    public RaftBootstrap(Members members,
+                         HttpClient httpClient,
+                         ElectionManager electionManager
     ) {
         this.members = members;
         this.httpClient = httpClient;

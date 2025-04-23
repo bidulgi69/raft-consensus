@@ -19,13 +19,13 @@ public class GrpcServerRunner implements ApplicationRunner {
     private Server server;
 
     // grpc 서버 실행 이후 처리를 위한 DI
-    private final Initializer initializer;
+    private final RaftBootstrap raftBootstrap;
     private final RaftGrpcService raftGrpcServiceImpl;
 
-    public GrpcServerRunner(Initializer initializer,
+    public GrpcServerRunner(RaftBootstrap raftBootstrap,
                             RaftGrpcService raftGrpcServiceImpl
     ) {
-        this.initializer = initializer;
+        this.raftBootstrap = raftBootstrap;
         this.raftGrpcServiceImpl = raftGrpcServiceImpl;
     }
 
@@ -36,7 +36,7 @@ public class GrpcServerRunner implements ApplicationRunner {
             .build()
             .start();
 
-        initializer.run();
+        raftBootstrap.run();
     }
 
     @PreDestroy
