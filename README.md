@@ -1,5 +1,5 @@
 # Raft-Consensus
-It is a toy project that implements the Raft consensus algorithm. The project is designed to help you learn and experiment with key concepts of the Raft algorithm, such as leader election, log replication, and configuration changes in a distributed system.
+A lightweight Java implementation of the Raft consensus algorithm. This project is designed to help you learn and experiment with key concepts of the Raft protocol, such as leader election, log replication & compaction, and configuration changes in a distributed system.
 
 ---
 
@@ -7,49 +7,49 @@ It is a toy project that implements the Raft consensus algorithm. The project is
 Raft is an algorithm designed to make complex consensus processes in distributed systems easier to understand.<br> The project includes the following features
 
 ### Leader Election
-Maintains cluster consistency by electing a single leader, even in the face of network partitions and failures.
+Follows Raft spec with randomized election timeouts to elect a single leader.
 
 ### Log Replication
-The leader records client commands to a log, which is then replicated to followers via the AppendEntries RPC and committed upon majority approval.
+Commands are recorded as LogEntry objects and appended to followers via AppendEntries RPC.
 
-### Membership Change
-Dynamically change the cluster configuration by securely adding/removing nodes through a joint consensus approach.
+### Snapshot
+Once the log grows beyond a threshold, a binary snapshot of the state machine is created and old logs are truncated.  New or lagging nodes catch up via InstallSnapshot RPC.
+
+### Membership Changes
+Add or remove nodes safely by replicating configuration-change entries.
+
+### Fault Tolerance
+Supports leader failover, network partitions (using iptables in tests), and recovery from crashes.
+
+### Testing Suite
+Automated bash scripts under tests/ orchestrate multi-node clusters with Docker Compose and validate:
+- Leader election & replication
+- Failover and rejoin behavior
+- Dynamic join/leave
+- Snapshot generation and catch-up via snapshot RPC
+- Network partition scenarios
 
 ---
 
-## Quick Start
-Before you start, build your project.
-```shell
-make bd
-```
+## Testing
+Scripts in the /tests directory drives a series of scenarios:
 
-You can try running multiple nodes simultaneously using the docker-compose.yml file included in the project.
-```shell
-# run with 3 nodes
-make init-cluster
-```
+### Leader election and replication 
+Test the process of electing a leader among the nodes and replicating logs from the leader to the follower nodes.
 
-You can also experiment with leader election and membership change by creating and stopping docker containers.
-```shell
-# a new node joins the cluster
-docker-compose up -d raft-node4
+### Leader broke(failover)
+Test the failover process in which a new node is elected and configuration (membership changes) are handled when the leader node fails.
 
-# raise unexpected server failure
-docker-compose down raft-node1
+### Membership change
+Test that the configuration log is replicated and reflected in each local membership by testing new nodes joining and existing nodes leaving.
 
-# rejoin
-docker-compose up -d raft-node1
-```
+### Snapshot compaction
+A snapshot is created on each node as soon as the number of logs crosses a threshold, and nodes that requested logs earlier than the `lastIncludedIndex` in the snapshot are tested via `InstallSnapshot RPC` to see if a follower can catch-up the current state.
 
-You can experiment log replication behavior through the following REST APIs.
-```shell
-# make sure you request to the leader node.
-curl -XPUT {leader_node}/put -d '{"message": "Hello World!"}' -i
+### Network partition and recovery
+Test production-likely case like network partitioning using iptables. After partitioning networks between leader and follower group, a new leader node would have been elected in the follower group. And the old-leader node would be a follower node when the network is restored.
 
-# Verify that the above log have been replicated to all nodes
-curl -XGET {any_node}/logs -s
-```
-
+---
 
 ## Reference
 https://raft.github.io/raft.pdf
