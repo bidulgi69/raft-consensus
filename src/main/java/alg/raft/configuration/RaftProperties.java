@@ -7,6 +7,12 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RaftProperties {
 
+    @Value("${raft.app.name:}")
+    private String appName;
+    // delimiter: ","
+    @Value("${raft.cluster.nodes:}")
+    private String nodes;
+
     @Value("${alg.raft.heartbeat-interval-ms:1000}")
     private int leaseInterval;
 
@@ -25,11 +31,22 @@ public class RaftProperties {
     @Value("${alg.raft.compaction.interval-ms:5000}")
     private int compactionInterval;
 
+    @Value("${alg.raft.membership.configuration-on-rpc-error:true}")
+    private boolean configurationOnRpcError;
+
     @PostConstruct
     public void init() {
         if (leaseInterval > electionMinTimeout) {
             throw new IllegalStateException("Lease interval should be lower than election minimum timeout.");
         }
+    }
+
+    public String getAppName() {
+        return appName;
+    }
+
+    public String getNodes() {
+        return nodes;
     }
 
     public int getLeaseInterval() {
@@ -54,5 +71,9 @@ public class RaftProperties {
 
     public int getCompactionInterval() {
         return compactionInterval;
+    }
+
+    public boolean configurationOnRpcError() {
+        return configurationOnRpcError;
     }
 }

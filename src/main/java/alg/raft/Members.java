@@ -1,5 +1,6 @@
 package alg.raft;
 
+import alg.raft.configuration.RaftProperties;
 import alg.raft.enums.EntryType;
 import alg.raft.enums.Membership;
 import alg.raft.event.ConfigurationInflightEvent;
@@ -13,7 +14,6 @@ import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -25,19 +25,13 @@ import java.util.stream.Collectors;
 
 @Component
 public class Members {
-
-    @Value("${raft.app.name:}")
-    private String appName;
-    // delimiter: ","
-    @Value("${raft.cluster.nodes:}")
-    private String nodes;
-
     private AtomicReference<Membership> membership;
     private AtomicReference<Configuration> inflightConfiguration = new AtomicReference<>();
 
     private final NodeState state;
     private final ChanneledPool channelPool;
     private final LogManager logManager;
+    private final RaftProperties properties;
     private Map<String, Channel> activeChannels; // members
     private Map<String, Channel> jointChannels; // joint membership
     private final Logger _logger = LoggerFactory.getLogger(getClass());
@@ -46,25 +40,27 @@ public class Members {
     public Members(NodeState state,
                    ChanneledPool channelPool,
                    LogManager logManager,
+                   RaftProperties properties,
                    EventDispatcher eventDispatcher
     ) {
         this.state = state;
         this.channelPool = channelPool;
         this.logManager = logManager;
+        this.properties = properties;
         this.activeChannels = new ConcurrentHashMap<>();
         eventDispatcher.registerConfigurationInflightEventConsumer(doConfigurationChange());
     }
 
     @PostConstruct
     public void init() {
-        if (nodes.isBlank()) {
+        if (properties.getAppName().isBlank()) {
             throw new IllegalStateException("Node list should not be blank.");
         }
 
-        List<String> topology = Arrays.stream(nodes.split(",")).collect(Collectors.toList());
+        List<String> topology = Arrays.stream(properties.getNodes().split(",")).collect(Collectors.toList());
         int appId = -1;
         for (int i = 0; i < topology.size(); i++) {
-            if (topology.get(i).contains(appName)) {
+            if (topology.get(i).contains(properties.getAppName())) {
                 appId = i;
                 break;
             }
@@ -109,14 +105,14 @@ public class Members {
             Membership.JOINT == membership.get() ?
                 jointChannels.keySet() :
                 activeChannels.keySet());
-        activeChannelHosts.add(appName);
+        activeChannelHosts.add(properties.getAppName());
 
         return activeChannelHosts;
     }
 
     public void jointMembership(Set<String> newConfiguration) {
         for (String node : newConfiguration) {
-            if (!jointChannels.containsKey(node) && !appName.equals(node)) {
+            if (!jointChannels.containsKey(node) && !properties.getAppName().equals(node)) {
                 Channel channel = Optional.ofNullable(activeChannels.getOrDefault(node, null))
                     .orElseGet(() -> {
                         String rpcConnect = node + ":" + Magics.DEFAULT_RPC_PORT;
@@ -136,7 +132,7 @@ public class Members {
     }
 
     public void updateMembership(Set<String> newConfiguration) {
-        newConfiguration.remove(appName);
+        newConfiguration.remove(properties.getAppName());
         for (String node : newConfiguration) {
             if (!activeChannels.containsKey(node) && jointChannels.containsKey(node)) {
                 _logger.info("New node {} joins in the membership", node);
@@ -177,6 +173,11 @@ public class Members {
 
     private Consumer<ConfigurationInflightEvent> doConfigurationChange() {
         return event -> {
+            // rpc 오류와 configuration 로그를 관계하지 않는다.
+            if (!properties.configurationOnRpcError()) {
+                return;
+            }
+
             Set<String> oldConfiguration = getActiveChannelHosts();
             Set<String> newConfiguration = new HashSet<>(oldConfiguration);
             newConfiguration.remove(event.zombieChannel().host());

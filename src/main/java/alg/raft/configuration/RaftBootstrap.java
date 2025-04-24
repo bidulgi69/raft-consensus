@@ -8,25 +8,24 @@ import alg.raft.utils.HttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
 public class RaftBootstrap {
 
-    @Value("${raft.app.name:}")
-    private String appName;
-
+    private final RaftProperties properties;
     private final Members members;
     private final HttpClient httpClient;
     private final ElectionManager electionManager;
     private final Logger _logger = LoggerFactory.getLogger(getClass());
 
     @Autowired
-    public RaftBootstrap(Members members,
+    public RaftBootstrap(RaftProperties properties,
+                         Members members,
                          HttpClient httpClient,
                          ElectionManager electionManager
     ) {
+        this.properties = properties;
         this.members = members;
         this.httpClient = httpClient;
         this.electionManager = electionManager;
@@ -38,7 +37,7 @@ public class RaftBootstrap {
             NodeType type = httpClient.getType(channel.host()).block();
             _logger.info("Node({})'s type is: {}", channel.host(), type);
             if (NodeType.LEADER == type) {
-                httpClient.join(channel.host(), appName).block();
+                httpClient.join(channel.host(), properties.getAppName()).block();
                 break;
             }
         }
