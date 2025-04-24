@@ -9,6 +9,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PreDestroy;
+import java.util.concurrent.Executors;
 
 @Component
 public class GrpcServerRunner implements ApplicationRunner {
@@ -33,6 +34,7 @@ public class GrpcServerRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) throws Exception {
         server = NettyServerBuilder.forPort(grpcPort)
             .addService(raftGrpcServiceImpl)
+            .executor(Executors.newSingleThreadExecutor())
             .build()
             .start();
 
