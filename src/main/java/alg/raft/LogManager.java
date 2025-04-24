@@ -62,7 +62,8 @@ public class LogManager {
     @PostConstruct
     public void init() {
         snapshotExecutor.scheduleAtFixedRate(() -> {
-            if (logEntries.size() >= properties.getCompactionThreshold()) {
+            long gap = state.getLastApplied() - (lastIncludedIndex == null ? 0 : lastIncludedIndex);
+            if (gap >= properties.getCompactionThreshold()) {
                 _logger.info("Compaction threshold reached!");
                 long lastAppliedIndex = state.getLastApplied();
                 LogEntry lastLogEntry = getEntry(lastAppliedIndex);
