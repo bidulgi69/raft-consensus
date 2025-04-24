@@ -9,7 +9,9 @@ import alg.raft.message.LogEntry;
 import alg.raft.rpc.AppendEntriesRpcMetadata;
 import alg.raft.rpc.InstallSnapshotRpcMetadata;
 import alg.raft.state.NodeState;
+import alg.raft.utils.RpcErrorContext;
 import com.google.protobuf.ByteString;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -174,6 +176,14 @@ public class Replicator {
                     metadata.channel().id(),
                     throwable
                 );
+                if (throwable instanceof StatusRuntimeException) {
+                    RpcErrorHandler.handleRpcError(new RpcErrorContext(
+                        metadata.channel(),
+                        (StatusRuntimeException) throwable,
+                        state,
+                        eventDispatcher
+                    ));
+                }
             }
 
             @Override
@@ -227,6 +237,14 @@ public class Replicator {
                     channel.id(),
                     throwable
                 );
+                if (throwable instanceof StatusRuntimeException) {
+                    RpcErrorHandler.handleRpcError(new RpcErrorContext(
+                        channel,
+                        (StatusRuntimeException) throwable,
+                        state,
+                        eventDispatcher
+                    ));
+                }
             }
 
             @Override

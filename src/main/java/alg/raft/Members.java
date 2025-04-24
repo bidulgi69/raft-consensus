@@ -1,6 +1,11 @@
 package alg.raft;
 
+import alg.raft.enums.EntryType;
 import alg.raft.enums.Membership;
+import alg.raft.event.ConfigurationInflightEvent;
+import alg.raft.event.EventDispatcher;
+import alg.raft.message.Configuration;
+import alg.raft.message.ConfigurationType;
 import alg.raft.state.NodeState;
 import alg.raft.utils.Magics;
 import io.grpc.ManagedChannel;
@@ -14,6 +19,7 @@ import org.springframework.stereotype.Component;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -27,20 +33,26 @@ public class Members {
     private String nodes;
 
     private AtomicReference<Membership> membership;
+    private AtomicReference<Configuration> inflightConfiguration = new AtomicReference<>();
 
     private final NodeState state;
     private final ChanneledPool channelPool;
+    private final LogManager logManager;
     private Map<String, Channel> activeChannels; // members
     private Map<String, Channel> jointChannels; // joint membership
     private final Logger _logger = LoggerFactory.getLogger(getClass());
 
     @Autowired
     public Members(NodeState state,
-                   ChanneledPool channelPool
+                   ChanneledPool channelPool,
+                   LogManager logManager,
+                   EventDispatcher eventDispatcher
     ) {
         this.state = state;
         this.channelPool = channelPool;
+        this.logManager = logManager;
         this.activeChannels = new ConcurrentHashMap<>();
+        eventDispatcher.registerConfigurationInflightEventConsumer(doConfigurationChange());
     }
 
     @PostConstruct
@@ -120,6 +132,7 @@ public class Members {
             }
         }
         membership.set(Membership.JOINT);
+        _logger.info("Node runs on joint mode...");
     }
 
     public void updateMembership(Set<String> newConfiguration) {
@@ -150,13 +163,42 @@ public class Members {
         }
 
         membership.set(Membership.STABLE);
+        inflightConfiguration = new AtomicReference<>();
         if (!jointChannels.isEmpty()) {
             _logger.warn("An anomaly was detected after the membership update.");
             jointChannels.clear();
         }
+        _logger.info("Membership update is completed via {}", newConfiguration);
     }
 
     public Membership getMembership() {
         return membership.get();
+    }
+
+    private Consumer<ConfigurationInflightEvent> doConfigurationChange() {
+        return event -> {
+            Set<String> oldConfiguration = getActiveChannelHosts();
+            Set<String> newConfiguration = new HashSet<>(oldConfiguration);
+            newConfiguration.remove(event.zombieChannel().host());
+            Configuration configuration = new Configuration(
+                ConfigurationType.JOINT,
+                oldConfiguration,
+                newConfiguration
+            );
+            // 멤버쉽에 변경이 없는 경우 무시한다.
+            if (oldConfiguration.equals(newConfiguration)) {
+                return;
+            }
+            // 동일한 membership 변경이 진행 중인 경우 무시한다.
+            if (inflightConfiguration.get() != null &&
+                oldConfiguration.equals(inflightConfiguration.get().oldConfiguration()) &&
+                newConfiguration.equals(inflightConfiguration.get().newConfiguration())
+            ) {
+                return;
+            }
+
+            inflightConfiguration.set(configuration);
+            logManager.enqueue(EntryType.CONFIGURATION, configuration);
+        };
     }
 }

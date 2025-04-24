@@ -16,4 +16,4 @@ alg.raft:
     min-timeout-ms: 4000
     max-timeout-ms: 10000
   compaction:
-    threshold: 5
+    threshold: 100

@@ -19,6 +19,7 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
 
     private final NodeState state;
     private final LogManager logManager;
+    private final LeaseManager leaseManager;
     private final ElectionManager electionManager;
     private final EventDispatcher eventDispatcher;
     private final Logger _logger = LoggerFactory.getLogger(getClass());
@@ -26,6 +27,7 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
     @Autowired
     public RaftGrpcService(NodeState state,
                            LogManager logManager,
+                           LeaseManager leaseManager,
                            ElectionManager electionManager,
                            EventDispatcher eventDispatcher
     ) {
@@ -33,6 +35,7 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
         this.logManager = logManager;
         this.electionManager = electionManager;
         this.eventDispatcher = eventDispatcher;
+        this.leaseManager = leaseManager;
     }
 
     @Override
@@ -62,35 +65,37 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
         }
 
         _logger.info("Node({}) received log entries from the leader.", state.getAppId());
+        NodeType currentState = state.getType();
         state.setType(NodeType.FOLLOWER);
-        if (state.getCurrentTerm() < request.getTerm()) {
-            state.setCurrentTerm(request.getTerm());
-            state.setVotedFor(null);
+        if (NodeType.LEADER == currentState) {
+            // prevent split-brain
+            leaseManager.stop();
+            responseObserver.onNext(defaultRespBuilder.build());
+            responseObserver.onCompleted();
+            return;
+        } else {
+            state.setType(NodeType.FOLLOWER);
+            if (state.getCurrentTerm() < request.getTerm()) {
+                state.setCurrentTerm(request.getTerm());
+                state.setVotedFor(null);
+            }
+            // 마지막으로 수신한 heartbeat 갱신
+            electionManager.onHeartbeat();
         }
-        electionManager.reschedule();
 
         // 3. If an existing entry conflicts with a new one (same index
         // but different terms), delete the existing entry and all that
         // follow it (§5.3)
-        int replicateFromIndex = 0;
-        for (int i = 0; i < entries.size(); i++) {
-            Entry entry = entries.get(i);
+        for (Entry entry : entries) {
             LogEntry existingEntry = logManager.getEntry(entry.getSequence());
-            if (existingEntry != null && existingEntry.term() != entry.getTerm()) {
+            if (existingEntry != null && existingEntry.term() != request.getTerm()) {
                 logManager.truncateFrom(entry.getSequence());
-                replicateFromIndex = i;
-                // entry 는 정렬된 상태이므로, 한번이라도 수행되면 이후의 처리는 넘어가도 됨.
-                break;
-            } else if (existingEntry != null) {
-                replicateFromIndex = i+1;
+                existingEntry = null;
             }
-        }
-
-        // 4. Append any new entries not already in the log
-        for (int i = replicateFromIndex; i < entries.size(); i++) {
-            Entry log = entries.get(i);
-            _logger.info("Received log details: [{}, {}, {}, {}}]", log.getSequence(), log.getTerm(), log.getType(), log.getLog());
-            logManager.replicate(log);
+            // 4. Append any new entries not already in the log
+            if (existingEntry == null) {
+                logManager.replicate(entry);
+            }
         }
 
         // local state machine 에 반영
@@ -121,7 +126,9 @@ public class RaftGrpcService extends RaftServiceGrpc.RaftServiceImplBase {
         long candidateLastLogTerm = request.getLastLogTerm();
 
         // 1. Reply false if term < currentTerm (§5.1)
-        if (state.getCurrentTerm() > term || state.getVotedFor() != null) {
+        if (state.getCurrentTerm() > term ||                                // 자신의 임기가 더 높은 경우
+            (state.getCurrentTerm() == term && state.getVotedFor() != null) // 임기는 동일하지만, 이미 투표한 경우
+        ) {
             responseObserver.onNext(RequestVoteResp.newBuilder()
                 .setTerm(state.getCurrentTerm())
                 .setVoteGranted(false)

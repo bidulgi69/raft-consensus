@@ -39,11 +39,13 @@ public class RaftBootstrap {
             _logger.info("Node({})'s type is: {}", channel.host(), type);
             if (NodeType.LEADER == type) {
                 httpClient.join(channel.host(), appName).block();
-                return;
+                break;
             }
         }
+        // 자신의 election timer 설정
+        electionManager.onHeartbeat();
+        electionManager.startElectionScheduler();
         // 클러스터에 리더가 존재하지 않는 경우
         _logger.info("There is no active leader in the cluster.");
-        electionManager.reschedule();
     }
 }

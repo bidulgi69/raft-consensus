@@ -2,8 +2,10 @@ package alg.raft;
 
 import alg.raft.configuration.RaftProperties;
 import alg.raft.enums.NodeType;
+import alg.raft.event.EventDispatcher;
 import alg.raft.message.LogEntry;
 import alg.raft.state.NodeState;
+import alg.raft.utils.Magics;
 import alg.raft.utils.RpcErrorContext;
 import io.grpc.StatusRuntimeException;
 import jakarta.annotation.PreDestroy;
@@ -23,9 +25,10 @@ public class ElectionManager {
     private final LogManager logManager;
     private final LeaseManager leaseManager;
     private final RaftProperties properties;
+    private final EventDispatcher eventDispatcher;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-    private ScheduledFuture<?> scheduledFuture;
+    private volatile long lastHeartbeat = System.currentTimeMillis();
     private final Logger _logger = LoggerFactory.getLogger(getClass());
 
     @Autowired
@@ -33,32 +36,41 @@ public class ElectionManager {
                            Members members,
                            LogManager logManager,
                            LeaseManager leaseManager,
-                           RaftProperties properties
+                           RaftProperties properties,
+                           EventDispatcher eventDispatcher
     ) {
         this.state = state;
         this.members = members;
         this.logManager = logManager;
         this.leaseManager = leaseManager;
         this.properties = properties;
+        this.eventDispatcher = eventDispatcher;
     }
 
-    public void reschedule() {
-        if (scheduledFuture != null && !scheduledFuture.isDone()) {
-            scheduledFuture.cancel(false);
-        }
+    public void onHeartbeat() {
+        this.lastHeartbeat = System.currentTimeMillis();
+    }
 
-        scheduledFuture = scheduler.schedule(
-            this::raiseElection,
-            getRandomTimeout(),
+    public void startElectionScheduler() {
+        long interval = properties.getElectionMinTimeout() / 5;
+        scheduler.scheduleAtFixedRate(() -> {
+            if (NodeType.LEADER == state.getType()) {
+                // 리더인 경우 재선거를 일으키지 않도록 방어
+                return;
+            }
+            long elapsed = System.currentTimeMillis() - lastHeartbeat;
+            long timeout = getRandomTimeout();
+            if (elapsed >= timeout) {
+                raiseElection();
+                lastHeartbeat = System.currentTimeMillis();
+            }
+        }, 0,    // initial delay
+            interval,       // interval (fixed rate)
             TimeUnit.MILLISECONDS
         );
     }
 
     public synchronized void raiseElection() {
-        if (state.getVotedFor() != null) {
-            return;
-        }
-
         long term = state.incrementAndGetTerm();
         _logger.info("Node({}) starts an election for {}th term", state.getAppId(), term);
         state.setVotedFor((long) state.getAppId());  // vote for me
@@ -71,7 +83,8 @@ public class ElectionManager {
         int quorum = 1 + members.getActiveChannelCount() / 2;
         int leftCandidates = channels.size();
         for (Channel channel : channels) {
-            RaftServiceGrpc.RaftServiceBlockingStub stub = RaftServiceGrpc.newBlockingStub(channel.channel());
+            RaftServiceGrpc.RaftServiceBlockingStub stub = RaftServiceGrpc.newBlockingStub(channel.channel())
+                .withDeadlineAfter(Magics.DEFAULT_VOTE_RPC_SYNC_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
             LogEntry lastLogEntry = logManager.getLastEntry();
             RequestVoteReq req = RequestVoteReq.newBuilder()
                 .setTerm(term)
@@ -93,8 +106,7 @@ public class ElectionManager {
                     channel,
                     e,
                     state,
-                    members,
-                    logManager
+                    eventDispatcher
                 ));
             }
 
@@ -114,8 +126,6 @@ public class ElectionManager {
                 state.setNextIndex(channel.id(), leaderCommitIndex);
                 state.setMatchIndex(channel.id(), 0L);
             });
-        } else {
-            reschedule();
         }
     }
 
@@ -128,9 +138,8 @@ public class ElectionManager {
 
     @PreDestroy
     public void shutdown() {
-        if (scheduledFuture != null) {
-            scheduledFuture.cancel(true);
+        if (!scheduler.isShutdown()) {
+            scheduler.shutdown();
         }
-        scheduler.shutdown();
     }
 }
